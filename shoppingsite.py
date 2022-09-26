@@ -6,10 +6,11 @@ put melons in a shopping cart.
 Authors: Joel Burton, Christian Fernandez, Meggie Mahnken, Katie Byers.
 """
 
-from flask import Flask, render_template, redirect, flash
+from flask import Flask, render_template, redirect, flash, session, request
 import jinja2
 
 import melons
+import customers
 
 app = Flask(__name__)
 
@@ -50,7 +51,7 @@ def show_melon(melon_id):
     Show all info about a melon. Also, provide a button to buy that melon.
     """
 
-    melon = melons.get_by_id("meli")
+    melon = melons.get_by_id(melon_id)
     print(melon)
     return render_template("melon_details.html",
                            display_melon=melon)
@@ -65,20 +66,32 @@ def show_shopping_cart():
     # The logic here will be something like:
     #
     # - get the cart dictionary from the session
+    cart = session.get("cart", {})
     # - create a list to hold melon objects and a variable to hold the total
     #   cost of the order
+    cart_melons = []
+    order_total = 0
     # - loop over the cart dictionary, and for each melon id:
+    for melon_id, quantity in cart.items():
     #    - get the corresponding Melon object
+        melon = melons.get_by_id(melon_id)
     #    - compute the total cost for that type of melon
+        total_cost = quantity * melon.price
     #    - add this to the order total
+        order_total += total_cost
     #    - add quantity and total cost as attributes on the Melon object
+        melon.quantity = quantity
+        melon.total_cost = total_cost
     #    - add the Melon object to the list created above
+        cart_melons.append(melon)
     # - pass the total order cost and the list of Melon objects to the template
     #
     # Make sure your function can also handle the case wherein no cart has
     # been added to the session
 
-    return render_template("cart.html")
+    return render_template("cart.html",
+                            cart=cart_melons,
+                            order_total=order_total)
 
 
 @app.route("/add_to_cart/<melon_id>")
@@ -95,12 +108,24 @@ def add_to_cart(melon_id):
     #
     # - check if a "cart" exists in the session, and create one (an empty
     #   dictionary keyed to the string "cart") if not
+    if 'cart' in session:
+        cart = session['cart']
+    else:
+        session['cart'] = {}
+
+
     # - check if the desired melon id is the cart, and if not, put it in
     # - increment the count for that melon id by 1
+    if melon_id in cart:
+        return cart[melon_id]
+    else:
+        cart[melon_id] = cart.get(melon_id, 0) + 1
+    
     # - flash a success message
+    flash("Melon successfully added to cart!")
     # - redirect the user to the cart page
 
-    return "Oops! This needs to be implemented!"
+    return redirect("/cart")
 
 
 @app.route("/login", methods=["GET"])
@@ -121,18 +146,33 @@ def process_login():
     # TODO: Need to implement this!
 
     # The logic here should be something like:
-    #
+   
+   
     # - get user-provided name and password from request.form
+    email = request.form.get('email')
+    password = request.form.get('password')
+
     # - use customers.get_by_email() to retrieve corresponding Customer
     #   object (if any)
-    # - if a Customer with that email was found, check the provided password
-    #   against the stored one
-    # - if they match, store the user's email in the session, flash a success
-    #   message and redirect the user to the "/melons" route
-    # - if they don't, flash a failure message and redirect back to "/login"
-    # - do the same if a Customer with that email doesn't exist
+    user = customers.get_by_email(email)
+    # - if a Customer with that email was found, check the provided password against the stored one
+    if user.email == email:
+        if user.password == password:
+            # - if they match, store the user's email in the session, flash a success message and redirect the user to the "/melons" route
+            session["logged_in"] = user.email
+            flash("Login successful!")
+            return redirect('/melons')
+            if user.password != password:
+                flash("Login failed. Try again.")
+                return redirect('/login')
+                if user.email != email:
+                    flash("Email does not exist. Try again.")
+                    return redirect('/login')
 
-    return "Oops! This needs to be implemented"
+
+    # - if they don't, flash a failure message and redirect back to "/login"
+
+    # - do the same if a Customer with that email doesn't exist
 
 
 @app.route("/checkout")
